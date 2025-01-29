@@ -1,33 +1,183 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, FlatList, StyleSheet, Modal, TextInput, Picker, Platform } from 'react-native';
+import React, {useEffect, useMemo, useState} from 'react';
+import {
+    View,
+    Text,
+    TouchableOpacity,
+    FlatList,
+    StyleSheet,
+    Modal,
+    TextInput,
+    Picker,
+    Platform,
+    KeyboardAvoidingView
+} from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Interaction, Client } from "@/api/models";
 import { interactionApi } from "@/api/interactionApi";
 import { clientApi } from "@/api/clientApi";
 import { useNavigation } from '@react-navigation/native';
+import {LinearGradient} from "expo-linear-gradient";
+
 const Interactions: React.FC = () => {
     const [interactions, setInteractions] = useState<Interaction[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
     const [isModalVisible, setModalVisible] = useState(false);
     const [newInteraction, setNewInteraction] = useState<Omit<Interaction, 'id'>>({
-        clientId: '',
+        clientId: 0,
         type: '',
         notes: '',
         date: new Date(),
     });
     const [isDatePickerVisible, setDatePickerVisible] = useState(false);
     const navigation = useNavigation();
+    const [isDeleteMode, setIsDeleteMode] = useState(false);
+    const [selectedInteractionId, setSelectedInteractionId] = useState<number | null>(null);
+    // Добавляем состояния
+    const [searchQuery, setSearchQuery] = useState('');
+    const [sortBy, setSortBy] = useState<'date' | 'type' | 'clientId'>('date');
+    const [sortAsc, setSortAsc] = useState(false);
+
+    // Фильтрация и сортировка
+    const filteredAndSortedInteractions = useMemo(() => {
+        let result = [...interactions];
+
+        // Поиск
+        if (searchQuery) {
+            const lowerQuery = searchQuery.toLowerCase();
+            result = result.filter(interaction =>
+                interaction.type.toLowerCase().includes(lowerQuery) ||
+                interaction.notes.toLowerCase().includes(lowerQuery) ||
+                interaction.clientId.toString().includes(lowerQuery)
+            );
+        }
+
+        // Сортировка
+        result.sort((a, b) => {
+            if (sortBy === 'date') {
+                const aTime = a.date.getTime();
+                const bTime = b.date.getTime();
+                return sortAsc ? aTime - bTime : bTime - aTime;
+            }
+
+            const aValue = a[sortBy].toString().toLowerCase();
+            const bValue = b[sortBy].toString().toLowerCase();
+
+            return sortAsc
+                ? aValue.localeCompare(bValue)
+                : bValue.localeCompare(aValue);
+        });
+
+        return result;
+    }, [interactions, searchQuery, sortBy, sortAsc]);
+
+    // Элементы управления
+    const renderHeaderControls = () => (
+        <View style={styles.controlsContainer}>
+            <View style={styles.searchContainer}>
+                <Icon
+                    name="magnify"
+                    size={20}
+                    color="#868e96"
+                    style={styles.searchIcon}
+                />
+                <TextInput
+                    style={styles.searchInput}
+                    placeholder="Поиск взаимодействий..."
+                    placeholderTextColor="#868e96"
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                />
+            </View>
+
+            <View style={styles.sortContainer}>
+                <TouchableOpacity
+                    style={styles.sortButton}
+                    onPress={() => setSortAsc(!sortAsc)}
+                >
+                    <LinearGradient
+                        colors={['#FF6B6B', '#FF4500']}
+                        style={styles.sortGradient}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                    >
+                        <Icon
+                            name={sortAsc ? "arrow-up" : "arrow-down"}
+                            size={16}
+                            color="white"
+                        />
+                    </LinearGradient>
+                </TouchableOpacity>
+
+                <View style={styles.pickerContainer}>
+                    <Picker
+                        selectedValue={sortBy}
+                        dropdownIconColor="#FF6B6B"
+                        style={styles.sortPicker}
+                        onValueChange={(value) => setSortBy(value)}
+                    >
+                        <Picker.Item
+                            label="Сортировка по дате"
+                            value="date"
+                            style={styles.pickerItem}
+                        />
+                        <Picker.Item
+                            label="Сортировка по типу"
+                            value="type"
+                            style={styles.pickerItem}
+                        />
+                        <Picker.Item
+                            label="Сортировка по клиенту"
+                            value="clientId"
+                            style={styles.pickerItem}
+                        />
+                    </Picker>
+                </View>
+            </View>
+        </View>
+    );
+
+    const fetchInteractions = async () => {
+        try {
+            const response = await interactionApi.getInteractions();
+            const data = await response.data;
+
+            // Конвертируем строки в Date объекты
+            const formattedData = data.map(interaction => ({
+                ...interaction,
+                date: new Date(interaction.date)
+            }));
+
+            setInteractions(formattedData);
+        } catch (error) {
+            console.error('Error fetching interactions:', error);
+        }
+    };
+
+    const handleDelClient = async (id: number) => {
+        try {
+            await interactionApi.deleteInteractions(id);
+            fetchInteractions();
+        }catch (error) {
+            console.error('Ошибка при удалении клиента', error);
+        }
+    }
+    const handleDelete = (id: number) => {
+        handleDelClient(id);
+        setIsDeleteMode(false);
+    };
+
+    const handleLongPress = (id: number) => {
+        setIsDeleteMode(true);
+        setSelectedInteractionId(id);
+    };
+
+    const cancelDeleteMode = () => {
+        setIsDeleteMode(false);
+        setSelectedInteractionId(null);
+    };
     // Загрузка списка взаимодействий
     useEffect(() => {
-        const fetchInteractions = async () => {
-            try {
-                const response = await interactionApi.getInteractions('');
-                setInteractions(await response.data);
-            } catch (error) {
-                console.error('Error fetching interactions:', error);
-            }
-        };
         fetchInteractions();
     }, []);
 
@@ -47,10 +197,25 @@ const Interactions: React.FC = () => {
     // Добавление нового взаимодействия
     const handleAddInteraction = async () => {
         try {
-            const response = await interactionApi.createInteraction(newInteraction);
-            setInteractions([...interactions, await response.data]);
+            // Конвертируем в ISO строку перед отправкой
+            const payload = {
+                ...newInteraction,
+                date: newInteraction.date.toISOString()
+            };
+
+            const response = await interactionApi.createInteraction(payload);
+            setInteractions([...interactions, {
+                ...response.data,
+                date: new Date(response.data.date) // Конвертируем обратно в Date
+            }]);
+
             setModalVisible(false);
-            setNewInteraction({ clientId: '', type: '', notes: '', date: new Date() });
+            setNewInteraction({
+                clientId: 0,
+                type: '',
+                notes: '',
+                date: new Date()
+            });
         } catch (error) {
             console.error('Error adding interaction:', error);
         }
@@ -58,84 +223,172 @@ const Interactions: React.FC = () => {
 
     return (
         <View style={styles.container}>
-            {/* Стрелка назад */}
-            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                <Icon name="arrow-left" size={28} color="#007AFF" />
-            </TouchableOpacity>
-
-            <Text style={styles.header}>Взаимодействия</Text>
-
-            {/* Кнопка добавления */}
+            {/* Header */}
+            <View style={styles.header}>
+                <TouchableOpacity
+                    onPress={() => navigation.goBack()}
+                    style={styles.backButton}
+                >
+                    <Icon name="chevron-left" size={28} color="#007AFF" />
+                </TouchableOpacity>
+                <Text style={styles.headerText}>Взаимодействия</Text>
+                <View style={{ width: 28 }} />
+            </View>
+            {renderHeaderControls()}
+            {/* Add Button */}
             <TouchableOpacity
                 style={styles.addButton}
                 onPress={() => setModalVisible(true)}
             >
-                <Icon name="plus" size={24} color="#fff" />
-                <Text style={styles.addButtonText}>Добавить взаимодействие</Text>
+                <LinearGradient
+                    colors={['#FF6B6B', '#FF4500']}
+                    style={styles.gradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                >
+                    <Icon name="plus" size={24} color="white" />
+                    <Text style={styles.addButtonText}>Новое взаимодействие</Text>
+                </LinearGradient>
             </TouchableOpacity>
 
-            {/* Список взаимодействий */}
+            {/* Interactions List */}
             <FlatList
-                data={interactions}
+                data={filteredAndSortedInteractions}
                 keyExtractor={(item) => item.id}
                 renderItem={({ item }) => (
-                    <View style={styles.interactionItem}>
-                        <Text style={styles.clientName}>Клиент ID: {item.clientId}</Text>
-                        <Text style={styles.type}>Тип: {item.type}</Text>
-                        <Text style={styles.notes}>Заметки: {item.notes}</Text>
-                        <Text style={styles.date}>Дата: {new Date(item.date).toLocaleDateString()}</Text>
-                    </View>
+                    <TouchableOpacity
+                        style={styles.interactionCard}
+                        onLongPress={() => handleLongPress(item.id)}
+                        activeOpacity={0.7}
+                    >
+                        <LinearGradient
+                            colors={['#FF6B6B', '#FF4500']}
+                            style={styles.typeIcon}
+                        >
+                            <Icon
+                                name={getInteractionIcon(item.type)}
+                                size={20}
+                                color="white"
+                            />
+                        </LinearGradient>
+
+                        <View style={styles.interactionInfo}>
+                            <Text style={styles.clientName}>Клиент #{item.clientId}</Text>
+                            <View style={styles.detailRow}>
+                                <Icon name="calendar" size={14} color="#868e96" />
+                                <Text style={styles.date}>
+                                    {new Date(item.date).toLocaleDateString()}
+                                </Text>
+                            </View>
+                            <Text
+                                style={styles.notes}
+                                numberOfLines={2}
+                                ellipsizeMode="tail"
+                            >
+                                {item.notes}
+                            </Text>
+                        </View>
+
+                        {isDeleteMode && (
+                            <TouchableOpacity
+                                onPress={() => handleDelete(item.id)}
+                                style={styles.deleteButton}
+                            >
+                                <Icon name="trash-can-outline" size={24} color="#ff3b30" />
+                            </TouchableOpacity>
+                        )}
+                    </TouchableOpacity>
                 )}
+                ListEmptyComponent={
+                    <View style={styles.emptyState}>
+                        <Icon name="comment-text-outline" size={48} color="#868e96" />
+                        <Text style={styles.emptyText}>Нет взаимодействий</Text>
+                    </View>
+                }
+                contentContainerStyle={styles.listContent}
             />
 
-            {/* Модальное окно */}
+            {/* Delete Mode Footer */}
+            {isDeleteMode && (
+                <TouchableOpacity
+                    style={styles.cancelDeleteButton}
+                    onPress={cancelDeleteMode}
+                >
+                    <Text style={styles.cancelDeleteText}>Отменить</Text>
+                </TouchableOpacity>
+            )}
+
+            {/* Modal */}
             <Modal
                 visible={isModalVisible}
-                transparent={true}
                 animationType="slide"
+                transparent
                 onRequestClose={() => setModalVisible(false)}
             >
-                <View style={styles.modalOverlay}>
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={styles.modalOverlay}
+                >
                     <View style={styles.modalContent}>
-                        <Text style={styles.modalHeader}>Новое взаимодействие</Text>
+                        <Text style={styles.modalTitle}>Новое взаимодействие</Text>
 
-                        {/* Выпадающий список клиентов */}
-                        <Picker
-                            selectedValue={newInteraction.clientId}
-                            style={styles.picker}
-                            onValueChange={(value) => setNewInteraction({ ...newInteraction, clientId: value })}
-                        >
-                            <Picker.Item label="Выберите клиента" value="" />
-                            {clients.map((client) => (
-                                <Picker.Item key={client.id} label={client.name} value={client.id} />
-                            ))}
-                        </Picker>
+                        <View style={styles.pickerContainer}>
+                            <Picker
+                                selectedValue={newInteraction.clientId}
+                                style={styles.picker}
+                                dropdownIconColor="#007AFF"
+                                onValueChange={(value) =>
+                                    setNewInteraction({ ...newInteraction, clientId: value })
+                                }
+                            >
+                                <Picker.Item
+                                    label="Выберите клиента"
+                                    value=""
+                                    style={styles.pickerPlaceholder}
+                                />
+                                {clients.map((client) => (
+                                    <Picker.Item
+                                        key={client.id}
+                                        label={client.name}
+                                        value={client.id}
+                                    />
+                                ))}
+                            </Picker>
+                        </View>
 
                         <TextInput
                             style={styles.input}
                             placeholder="Тип взаимодействия"
+                            placeholderTextColor="#868e96"
                             value={newInteraction.type}
-                            onChangeText={(text) => setNewInteraction({ ...newInteraction, type: text })}
-                        />
-                        <TextInput
-                            style={[styles.input, { height: 100 }]}
-                            placeholder="Заметки"
-                            multiline={true}
-                            value={newInteraction.notes}
-                            onChangeText={(text) => setNewInteraction({ ...newInteraction, notes: text })}
+                            onChangeText={(text) =>
+                                setNewInteraction({ ...newInteraction, type: text })
+                            }
                         />
 
-                        {/* Выбор даты */}
+                        <TextInput
+                            style={[styles.input, styles.notesInput]}
+                            placeholder="Заметки"
+                            placeholderTextColor="#868e96"
+                            multiline
+                            value={newInteraction.notes}
+                            onChangeText={(text) =>
+                                setNewInteraction({ ...newInteraction, notes: text })
+                            }
+                        />
+
                         <TouchableOpacity
-                            style={styles.input}
+                            style={styles.dateInput}
                             onPress={() => setDatePickerVisible(true)}
                         >
-                            <Text>
+                            <Icon name="calendar" size={18} color="#868e96" />
+                            <Text style={styles.dateText}>
                                 {newInteraction.date
                                     ? newInteraction.date.toLocaleDateString()
                                     : 'Выберите дату'}
                             </Text>
                         </TouchableOpacity>
+
                         {isDatePickerVisible && (
                             <DateTimePicker
                                 value={newInteraction.date}
@@ -150,136 +403,298 @@ const Interactions: React.FC = () => {
                             />
                         )}
 
-                        <View style={styles.modalActions}>
-                            <TouchableOpacity
-                                style={styles.modalButton}
-                                onPress={handleAddInteraction}
-                            >
-                                <Text style={styles.modalButtonText}>Добавить</Text>
-                            </TouchableOpacity>
+                        <View style={styles.modalButtons}>
                             <TouchableOpacity
                                 style={[styles.modalButton, styles.cancelButton]}
                                 onPress={() => setModalVisible(false)}
                             >
-                                <Text style={styles.modalButtonText}>Отмена</Text>
+                                <Text style={styles.cancelButtonText}>Отмена</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.modalButton, styles.submitButton]}
+                                onPress={handleAddInteraction}
+                            >
+                                <Text style={styles.submitButtonText}>Сохранить</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
-                </View>
+                </KeyboardAvoidingView>
             </Modal>
         </View>
     );
 };
 
-export default Interactions;
+const getInteractionIcon = (type: string) => {
+    switch(type.toLowerCase()) {
+        case 'звонок': return 'phone';
+        case 'встреча': return 'calendar';
+        default: return 'email';
+    }
+};
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#f5f5f5',
-        padding: 20,
+    controlsContainer: {
+        padding: 16,
+        backgroundColor: '#ffffff',
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: '#e5e5e5',
     },
-    backButton: {
-        position: 'absolute',
-        top: 25,
-        left: 16,
-        zIndex: 1,
-    },
-    header: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#333',
-        marginHorizontal: "auto",
-        marginBottom: 20,
-    },
-    addButton: {
+    searchContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#007AFF',
-        padding: 15,
+        backgroundColor: '#f5f5f7',
         borderRadius: 10,
-        marginBottom: 20,
+        paddingHorizontal: 12,
+        marginBottom: 12,
+        height: 40,
     },
-    addButtonText: {
-        color: '#fff',
-        fontSize: 16,
-        marginLeft: 10,
+    searchIcon: {
+        marginRight: 8,
     },
-    interactionItem: {
-        backgroundColor: '#fff',
-        padding: 15,
-        borderRadius: 10,
-        marginBottom: 10,
+    searchInput: {
+        flex: 1,
+        fontSize: 17,
+        color: '#1c1c1e',
+        paddingVertical: 0,
+    },
+    sortContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    sortButton: {
+        borderRadius: 8,
+        overflow: 'hidden',
+        marginRight: 12,
+        shadowColor: '#FF6B6B',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
         elevation: 3,
     },
-    clientName: {
+    sortGradient: {
+        width: 40,
+        height: 32,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    pickerContainer: {
+        flex: 1,
+        borderWidth: 1,
+        borderColor: '#e5e5e5',
+        borderRadius: 8,
+        marginBottom: 5,
+        overflow: 'hidden',
+    },
+    sortPicker: {
+        borderWidth: 1,
+        borderRadius: 8,
+        height: 32,
+        backgroundColor: '#f5f5f7',
+    },
+    pickerItem: {
+        fontSize: 15,
+        color: '#1c1c1e',
+    },
+    container: {
+        flex: 1,
+        backgroundColor: '#ffffff',
+    },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 16,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: '#e5e5e5',
+    },
+    backButton: {
+        padding: 8,
+    },
+    headerText: {
+        fontSize: 20,
+        fontWeight: '600',
+        color: '#1c1c1e',
+    },
+    addButton: {
+        margin: 16,
+        borderRadius: 25,
+        overflow: 'hidden',
+        shadowColor: '#FF6B6B',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 6,
+    },
+    gradient: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 14,
+        paddingHorizontal: 20,
+    },
+    addButtonText: {
+        color: 'white',
         fontSize: 16,
-        fontWeight: 'bold',
-        color: '#333',
+        fontWeight: '600',
+        marginLeft: 8,
     },
-    type: {
-        fontSize: 14,
-        color: '#555',
+    interactionCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#ffffff',
+        padding: 16,
+        marginHorizontal: 16,
+        marginVertical: 8,
+        borderRadius: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 6,
+        elevation: 3,
     },
-    notes: {
-        fontSize: 14,
-        color: '#777',
-        marginTop: 5,
+    typeIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 16,
+    },
+    interactionInfo: {
+        flex: 1,
+    },
+    clientName: {
+        fontSize: 17,
+        fontWeight: '500',
+        color: '#1c1c1e',
+        marginBottom: 4,
+    },
+    detailRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 4,
     },
     date: {
-        fontSize: 14,
-        color: '#999',
-        marginTop: 5,
+        fontSize: 15,
+        color: '#868e96',
+        marginLeft: 8,
+    },
+    notes: {
+        fontSize: 15,
+        color: '#868e96',
+        lineHeight: 20,
+    },
+    deleteButton: {
+        padding: 8,
+        marginLeft: 12,
+    },
+    emptyState: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 40,
+    },
+    emptyText: {
+        fontSize: 17,
+        color: '#868e96',
+        marginTop: 16,
+    },
+    cancelDeleteButton: {
+        backgroundColor: '#ff3b30',
+        borderRadius: 12,
+        padding: 14,
+        margin: 16,
+        alignItems: 'center',
+    },
+    cancelDeleteText: {
+        color: 'white',
+        fontWeight: '600',
+    },
+    listContent: {
+        paddingBottom: 100,
     },
     modalOverlay: {
         flex: 1,
         justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backgroundColor: 'rgba(0,0,0,0.4)',
     },
     modalContent: {
-        width: '90%',
-        backgroundColor: '#fff',
-        borderRadius: 10,
-        padding: 20,
-        elevation: 5,
+        backgroundColor: '#ffffff',
+        marginHorizontal: 20,
+        borderRadius: 16,
+        padding: 24,
     },
-    modalHeader: {
+    modalTitle: {
         fontSize: 20,
-        fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 15,
-    },
-    input: {
-        borderWidth: 1,
-        borderColor: '#ccc',
-        borderRadius: 10,
-        padding: 10,
-        marginBottom: 15,
-        fontSize: 16,
+        fontWeight: '600',
+        color: '#1c1c1e',
+        marginBottom: 24,
+        textAlign: 'center',
     },
     picker: {
-        height: 50,
-        width: '100%',
-        marginBottom: 15,
+        borderWidth: 1,
+        borderRadius: 8,
+        backgroundColor: '#f5f5f5',
     },
-    modalActions: {
+    pickerPlaceholder: {
+        color: '#868e96',
+    },
+    input: {
+        backgroundColor: '#f5f5f5',
+        borderRadius: 12,
+        padding: 14,
+        fontSize: 16,
+        color: '#1c1c1e',
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: '#e5e5e5',
+    },
+    notesInput: {
+        height: 100,
+        textAlignVertical: 'top',
+    },
+    dateInput: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#f5f5f5',
+        borderRadius: 12,
+        padding: 14,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: '#e5e5e5',
+    },
+    dateText: {
+        fontSize: 16,
+        color: '#1c1c1e',
+        marginLeft: 8,
+    },
+    modalButtons: {
         flexDirection: 'row',
         justifyContent: 'space-between',
+        marginTop: 16,
     },
     modalButton: {
-        backgroundColor: '#007AFF',
-        padding: 15,
-        borderRadius: 10,
         flex: 1,
+        borderRadius: 12,
+        padding: 14,
         alignItems: 'center',
-        marginHorizontal: 5,
     },
     cancelButton: {
-        backgroundColor: '#ccc',
+        backgroundColor: '#f5f5f5',
+        marginRight: 8,
     },
-    modalButtonText: {
-        color: '#fff',
-        fontSize: 16,
+    submitButton: {
+        backgroundColor: '#FF6B6B',
+        marginLeft: 8,
+    },
+    cancelButtonText: {
+        color: '#1c1c1e',
+        fontWeight: '600',
+    },
+    submitButtonText: {
+        color: 'white',
+        fontWeight: '600',
     },
 });
+
+export default Interactions;

@@ -1,5 +1,5 @@
 const {ApiError} = require('../error/ApiError')
-const {Order} = require("../models/models");
+const {Order, Client} = require("../models/models");
 
 class OrderController {
     async create(req, res, next) {
@@ -17,6 +17,17 @@ class OrderController {
             const { clientId } = req.params;
             const orders = await Order.findAll({ where: { clientId } });
             res.json(orders);
+        } catch (error) {
+            next(ApiError.internal());
+        }
+    }
+
+    async delete(req, res, next) {
+        try {
+            const { id } = req.params;
+            const rowsDeleted = await Order.destroy({ where: { id } });
+            if (!rowsDeleted) return next(ApiError.badRequest('Клиент не найден'));
+            res.status(204).send();
         } catch (error) {
             next(ApiError.internal());
         }

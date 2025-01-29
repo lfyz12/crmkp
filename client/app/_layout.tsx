@@ -3,6 +3,7 @@ import {StatusBar} from "expo-status-bar";
 import {DarkTheme, DefaultTheme, ThemeProvider} from "@react-navigation/native";
 import {ActivityIndicator, View} from "react-native";
 import {useEffect, useState} from "react";
+import {AuthProvider} from "@/context/AuthContext";
 export default function RootLayout() {
     const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);  // Состояние для проверки авторизации
 
@@ -27,6 +28,7 @@ export default function RootLayout() {
     }
 
     return (
+        <AuthProvider>
         <Stack screenOptions={{ headerShown: false }}>
             {/* Если не авторизован — показываем экран авторизации */}
             {isAuthenticated ? (
@@ -35,5 +37,7 @@ export default function RootLayout() {
                 <Stack.Screen name="Login" />
             )}
         </Stack>
+        </AuthProvider>
+
     );
 }

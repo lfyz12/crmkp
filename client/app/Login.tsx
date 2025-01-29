@@ -1,14 +1,34 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet } from 'react-native';
+import {
+    View,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    Alert,
+    StyleSheet,
+    KeyboardAvoidingView,
+    Platform,
+    Dimensions
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { userApi } from '@/api/userApi';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, {
+    useSharedValue,
+    useAnimatedStyle,
+    withSpring
+} from 'react-native-reanimated';
+import { useAuth } from '../context/AuthContext';
+
+const { height } = Dimensions.get('window');
 
 const Login: React.FC = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [isLogin, setIsLogin] = useState(true);
-
     const router = useRouter();
+    const { login } = useAuth();
+    const buttonScale = useSharedValue(1);
 
     const handleLogin = async () => {
         if (!email || !password) {
@@ -22,100 +42,191 @@ const Login: React.FC = () => {
                 ? await userApi.login(userData)
                 : await userApi.register(userData);
 
-            console.log('Успех:', response);
+            // Сохраняем токен
+            await login(response.token);
 
             Alert.alert('Успех', isLogin ? 'Вход выполнен' : 'Регистрация выполнена');
-            router.replace('/(screens)'); // Перенаправляем в приложение с табами
+            router.replace('/(screens)');
         } catch (error) {
             Alert.alert('Ошибка', 'Что-то пошло не так. Попробуйте снова.');
         }
     };
 
+    const animatedButtonStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: buttonScale.value }]
+    }));
+
+    const handlePressIn = () => {
+        buttonScale.value = withSpring(0.96);
+    };
+
+    const handlePressOut = () => {
+        buttonScale.value = withSpring(1);
+    };
+
     return (
         <View style={styles.container}>
-            <Text style={styles.title}>{isLogin ? 'Вход' : 'Регистрация'}</Text>
+            {/* Фон с плавным градиентом */}
+            <LinearGradient
+                colors={['#4A90E2', '#F8F9FA']}
+                style={styles.background}
+                start={{ x: 0.5, y: 0 }}
+                end={{ x: 0.5, y: 0.7 }}
+            />
 
-            <View style={styles.inputContainer}>
-                <TextInput
-                    style={styles.input}
-                    placeholder="Email"
-                    value={email}
-                    onChangeText={setEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                />
-                <TextInput
-                    style={styles.input}
-                    placeholder="Пароль"
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry
-                />
-            </View>
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={styles.content}
+            >
+                <View style={styles.formContainer}>
+                    <Text style={styles.title}>
+                        {isLogin ? 'Вход' : 'Регистрация'}
+                    </Text>
 
-            <TouchableOpacity style={styles.button} onPress={handleLogin}>
-                <Text style={styles.buttonText}>
-                    {isLogin ? 'Войти' : 'Зарегистрироваться'}
-                </Text>
-            </TouchableOpacity>
+                    <View style={styles.inputsWrapper}>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Email"
+                            placeholderTextColor="#868e96"
+                            value={email}
+                            onChangeText={setEmail}
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                        />
 
-            <TouchableOpacity onPress={() => setIsLogin((prev) => !prev)}>
-                <Text style={styles.switchText}>
-                    {isLogin ? 'Нет аккаунта? Зарегистрироваться' : 'Уже есть аккаунт? Войти'}
-                </Text>
-            </TouchableOpacity>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Пароль"
+                            placeholderTextColor="#868e96"
+                            value={password}
+                            onChangeText={setPassword}
+                            secureTextEntry
+                        />
+                    </View>
+
+                    <Animated.View style={[animatedButtonStyle, styles.buttonWrapper]}>
+                        <TouchableOpacity
+                            style={styles.button}
+                            onPressIn={handlePressIn}
+                            onPressOut={handlePressOut}
+                            onPress={handleLogin}
+                            activeOpacity={0.9}
+                        >
+                            <LinearGradient
+                                colors={['#4A90E2', '#4169E1']}
+                                style={styles.gradient}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 0 }}
+                            >
+                                <Text style={styles.buttonText}>
+                                    {isLogin ? 'Войти' : 'Продолжить'}
+                                </Text>
+                            </LinearGradient>
+                        </TouchableOpacity>
+                    </Animated.View>
+                </View>
+
+                <TouchableOpacity
+                    style={styles.switchButton}
+                    onPress={() => setIsLogin(prev => !prev)}
+                >
+                    <Text style={styles.switchText}>
+                        {isLogin
+                            ? 'Нет аккаунта? '
+                            : 'Уже есть аккаунт? '}
+                        <Text style={styles.switchAccent}>
+                            {isLogin ? 'Создать аккаунт' : 'Войти'}
+                        </Text>
+                    </Text>
+                </TouchableOpacity>
+            </KeyboardAvoidingView>
         </View>
     );
 };
 
-export default Login;
-
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+        backgroundColor: '#FFFFFF',
+    },
+    background: {
+        position: 'absolute',
+        width: '100%',
+        height: '100%',
+    },
+    content: {
+        flex: 1,
         justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#f5f5f5',
-        paddingHorizontal: 20,
+        paddingHorizontal: 30,
+    },
+    formContainer: {
+        backgroundColor: 'rgba(255,255,255,0.95)',
+        borderRadius: 24,
+        padding: 24,
+        shadowColor: '#4A90E2',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.15,
+        shadowRadius: 20,
+        elevation: 5,
     },
     title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 20,
+        fontSize: 28,
+        fontWeight: '600',
+        color: '#1a1a1a',
+        marginBottom: 32,
+        textAlign: 'center',
     },
-    inputContainer: {
-        width: '100%',
-        marginBottom: 15,
+    inputsWrapper: {
+        marginBottom: 24,
     },
     input: {
-        backgroundColor: '#fff',
-        borderWidth: 1,
-        borderColor: '#ccc',
-        borderRadius: 8,
-        paddingHorizontal: 15,
-        paddingVertical: 10,
+        backgroundColor: '#f8f9fa',
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
         fontSize: 16,
-        color: '#333',
-        marginBottom: 10,
+        color: '#1a1a1a',
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: '#e9ecef',
+    },
+    buttonWrapper: {
+        borderRadius: 12,
+        overflow: 'hidden',
+        shadowColor: '#4A90E2',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
     },
     button: {
-        backgroundColor: '#007BFF',
-        paddingVertical: 12,
-        paddingHorizontal: 20,
-        borderRadius: 8,
-        width: '100%',
+        borderRadius: 12,
+        overflow: 'hidden',
+    },
+    gradient: {
+        paddingVertical: 16,
         alignItems: 'center',
-        marginBottom: 15,
     },
     buttonText: {
-        color: '#fff',
+        color: 'white',
         fontSize: 16,
-        fontWeight: 'bold',
+        fontWeight: '600',
+        letterSpacing: 0.5,
+    },
+    switchButton: {
+        position: 'absolute',
+        bottom: 40,
+        alignSelf: 'center',
+        padding: 12,
     },
     switchText: {
-        color: '#007BFF',
+        color: '#495057',
         fontSize: 14,
-        fontWeight: '500',
+    },
+    switchAccent: {
+        color: '#4169E1',
+        fontWeight: '600',
     },
 });
+
+export default Login;

@@ -13,7 +13,7 @@ export const orderApi = {
         }
     },
 
-    async getOrders(clientId: string): AxiosResponse {
+    async getOrders(clientId: number): AxiosResponse {
         try {
             const response = await $host.get(`/orders/${clientId}`);
             return response;
@@ -21,4 +21,13 @@ export const orderApi = {
             handleError(error as AxiosError);
         }
     },
+
+    async deleteOrders(id: number): AxiosResponse {
+        try {
+            const response = await $host.delete(`/orders/${id}`);
+            return response.data;
+        } catch (error) {
+            handleError(error as AxiosError);
+        }
+    }
 }

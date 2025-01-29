@@ -42,6 +42,36 @@ class ClientController {
             next(ApiError.internal());
         }
     }
+
+    async update(req, res, next) {
+        try {
+            const { id } = req.params;
+            const { name, email, phone } = req.body;
+
+            // Проверяем существование клиента
+            const client = await Client.findByPk(id);
+            if (!client) {
+                return next(ApiError.badRequest('Клиент не найден'));
+            }
+
+            // Обновляем поля
+            const [updatedCount] = await Client.update(
+                { name, email, phone },
+                { where: { id } }
+            );
+
+            if (updatedCount === 0) {
+                return next(ApiError.badRequest('Не удалось обновить клиента'));
+            }
+
+            // Получаем обновлённого клиента
+            const updatedClient = await Client.findByPk(id);
+            res.json(updatedClient);
+
+        } catch (error) {
+            next(ApiError.internal(error.message));
+        }
+    }
 }
 
 module.exports = new ClientController()

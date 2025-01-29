@@ -14,18 +14,22 @@ router.post('/users/login', userController.login);
 router.post('/clients', clientController.create);
 router.get('/clients', clientController.getAll);
 router.get('/clients/:id', clientController.getById);
+router.put('/clients/:id', clientController.update);
 router.delete('/clients/:id', clientController.delete);
 
 // Interaction Routes
 router.post('/interactions', interactionController.create);
-router.get('/interactions/:clientId', interactionController.getByClient);
+router.get('/interactions', interactionController.getByClient);
+router.delete('/interactions/:id', interactionController.delete);
 
 // Order Routes
 router.post('/orders', orderController.create);
 router.get('/orders/:clientId', orderController.getByClient);
+router.delete('/orders/:id', orderController.delete);
 
 // Note Routes
 router.post('/notes', noteController.create);
 router.get('/notes/:clientId', noteController.getByClient);
+router.delete('/notes/:id', noteController.delete);
 
 module.exports = router;

@@ -13,7 +13,7 @@ export const noteApi = {
         }
     },
 
-    async getNotes(clientId: string): AxiosResponse<Promise<Note[]>> {
+    async getNotes(clientId: number): AxiosResponse<Promise<Note[]>> {
         try {
             const response = await $host.get(`/notes/${clientId}`);
             return response;
@@ -21,4 +21,13 @@ export const noteApi = {
             handleError(error as AxiosError);
         }
     },
+
+    async deleteNotes(id: number): AxiosResponse {
+        try {
+            const response = await $host.delete(`/notes/${id}`);
+            return response.data;
+        } catch (error) {
+            handleError(error as AxiosError);
+        }
+    }
 }

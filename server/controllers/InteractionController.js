@@ -1,4 +1,4 @@
-const {Interaction} = require("../models/models");
+const {Interaction, Client} = require("../models/models");
 const {ApiError} = require('../error/ApiError')
 class InteractionController {
     async create(req, res, next) {
@@ -13,9 +13,19 @@ class InteractionController {
 
     async getByClient(req, res, next) {
         try {
-            const { clientId } = req.params;
-            const interactions = await Interaction.findAll({ where: { clientId } });
+            const interactions = await Interaction.findAll();
             res.json(interactions);
+        } catch (error) {
+            next(ApiError.internal());
+        }
+    }
+
+    async delete(req, res, next) {
+        try {
+            const { id } = req.params;
+            const rowsDeleted = await Interaction.destroy({ where: { id } });
+            if (!rowsDeleted) return next(ApiError.badRequest('Клиент не найден'));
+            res.status(204).send();
         } catch (error) {
             next(ApiError.internal());
         }

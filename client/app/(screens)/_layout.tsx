@@ -22,6 +22,13 @@ export default function screensLayout() {
                 }}
             />
             <Tabs.Screen
+                name="Login"
+                options={{
+                    title: 'Авторизация',
+                    tabBarStyle: { display: 'none' }
+                }}
+            />
+            <Tabs.Screen
                 name="Clients"
                 options={{
                     title: 'Клиенты',

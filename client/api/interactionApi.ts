@@ -14,12 +14,21 @@ export const interactionApi = {
         }
     },
 
-    async getInteractions(clientId: string):AxiosResponse {
+    async getInteractions():AxiosResponse {
         try {
-            const response = await $host.get(`/interactions/${clientId}`);
+            const response = await $host.get(`/interactions`);
             return response;
         } catch (error) {
             handleError(error as AxiosError);
         }
     },
+
+    async deleteInteractions(id: number): AxiosResponse {
+        try {
+            const response = await $host.delete(`/interactions/${id}`);
+            return response.data;
+        } catch (error) {
+            handleError(error as AxiosError);
+        }
+    }
 }
