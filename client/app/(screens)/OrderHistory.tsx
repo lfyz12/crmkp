@@ -25,7 +25,7 @@ const OrderHistory: React.FC = () => {
     const [clients, setClients] = useState<Client[]>([]);
     const [isModalVisible, setModalVisible] = useState(false);
     const [newOrder, setNewOrder] = useState<Omit<Order, "id">>({
-        clientId: 0,
+        clientId: selectedClientId || 0, // Используем текущий selectedClientId
         orderDetails: "",
         totalAmount: 0,
     });
@@ -34,6 +34,13 @@ const OrderHistory: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState("");
     const [sortBy, setSortBy] = useState<"date" | "amount">("date");
     const [sortAsc, setSortAsc] = useState(true);
+
+    useEffect(() => {
+        setNewOrder(prev => ({
+            ...prev,
+            clientId: selectedClientId || 0
+        }));
+    }, [selectedClientId]);
 
     const filteredAndSortedOrders = useMemo(() => {
         let result = [...orders];
@@ -116,12 +123,29 @@ const OrderHistory: React.FC = () => {
 
     const handleCreateOrder = async () => {
         try {
+            // Проверка наличия clientId
+            if (!newOrder.clientId || newOrder.clientId === 0) {
+                alert("Ошибка: Клиент не выбран");
+                return;
+            }
+
+            // Проверка заполнения обязательных полей
+            if (!newOrder.orderDetails.trim() || newOrder.totalAmount <= 0) {
+                alert("Заполните все обязательные поля (Детали и Сумма)");
+                return;
+            }
+
             await orderApi.createOrder(newOrder);
             fetchOrders();
             setModalVisible(false);
-            setNewOrder({ clientId: 0, orderDetails: "", totalAmount: 0 });
+            setNewOrder({
+                clientId: selectedClientId!,
+                orderDetails: "",
+                totalAmount: 0
+            });
         } catch (error) {
             console.error("Error creating order:", error);
+            alert("Ошибка при создании заказа");
         }
     };
 
@@ -173,7 +197,13 @@ const OrderHistory: React.FC = () => {
             )}
         </TouchableOpacity>
     );
-
+    const handleOpenModal = () => {
+        if (!selectedClientId) {
+            alert("Сначала выберите клиента");
+            return;
+        }
+        setModalVisible(true);
+    };
     return (
         <View style={styles.container}>
             <View style={styles.header}>
@@ -247,7 +277,7 @@ const OrderHistory: React.FC = () => {
             {selectedClientId && !isDeleteMode && (
                 <TouchableOpacity
                     style={styles.addButton}
-                    onPress={() => setModalVisible(true)}
+                    onPress={handleOpenModal}
                 >
                     <LinearGradient
                         colors={["#9370DB", "#6A5ACD"]}
