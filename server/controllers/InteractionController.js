@@ -1,5 +1,6 @@
 const {Interaction, Client} = require("../models/models");
 const {ApiError} = require('../error/ApiError')
+const {where} = require("sequelize");
 class InteractionController {
     async create(req, res, next) {
         try {
@@ -13,10 +14,17 @@ class InteractionController {
 
     async getByClient(req, res, next) {
         try {
-            const interactions = await Interaction.findAll();
-            res.json(interactions);
+            const { clientId } = req.params;
+            if (!clientId) {
+                return next(ApiError.badRequest('Не указан ID клиента'));
+            }
+
+            const interactions = await Interaction.findAll({
+                where: { clientId },
+            });
+            return res.json(interactions);
         } catch (error) {
-            next(ApiError.internal());
+            next(ApiError.internal(error.message));
         }
     }
 

@@ -28,7 +28,8 @@ const Notes: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [sortBy, setSortBy] = useState<'content' | 'clientId' | 'date'>('date');
     const [sortAsc, setSortAsc] = useState(false);
-
+    const [confirmDeleteVisible, setConfirmDeleteVisible] = useState(false);
+    const [noteToDelete, setNoteToDelete] = useState<number | null>(null);
     // Фильтрация и сортировка
     const filteredAndSortedNotes = useMemo(() => {
         let result = [...notes];
@@ -125,6 +126,42 @@ const Notes: React.FC = () => {
             </View>
         </View>
     );
+
+    const renderConfirmModal = () => (
+        <Modal
+            visible={confirmDeleteVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setConfirmDeleteVisible(false)}
+        >
+            <View style={styles.confirmModalOverlay}>
+                <View style={styles.confirmModalContent}>
+                    <Text style={styles.confirmModalTitle}>
+                        Удалить заметку?
+                    </Text>
+                    <Text style={styles.confirmModalText}>
+                        Это действие нельзя отменить
+                    </Text>
+
+                    <View style={styles.confirmModalButtons}>
+                        <TouchableOpacity
+                            style={[styles.confirmButton, styles.cancelConfirmButton]}
+                            onPress={() => setConfirmDeleteVisible(false)}
+                        >
+                            <Text style={styles.confirmButtonText}>Отмена</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.confirmButton, styles.deleteConfirmButton]}
+                            onPress={confirmDelete}
+                        >
+                            <Text style={styles.confirmButtonText}>Удалить</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </View>
+        </Modal>
+    );
     // Получение списка клиентов
     useEffect(() => {
         const fetchClients = async () => {
@@ -137,19 +174,19 @@ const Notes: React.FC = () => {
         };
         fetchClients();
     }, []);
-
+    const fetchNotes = async () => {
+        try {
+            const response = await noteApi.getNotes(selectedClientId!);
+            setNotes(await response.data);
+        } catch (error) {
+            console.error("Error fetching notes:", error);
+        }
+    };
     // Получение заметок для выбранного клиента
     useEffect(() => {
         if (!selectedClientId) return;
 
-        const fetchNotes = async () => {
-            try {
-                const response = await noteApi.getNotes(selectedClientId);
-                setNotes(await response.data);
-            } catch (error) {
-                console.error("Error fetching notes:", error);
-            }
-        };
+
         fetchNotes();
     }, [selectedClientId]);
 
@@ -171,14 +208,24 @@ const Notes: React.FC = () => {
     };
 
     // Удаление заметки
+
+
     const handleDeleteNote = async (noteId: number) => {
-        try {
-            await noteApi.deleteNotes(noteId);
-            setNotes(notes.filter(note => note.id !== noteId));
-            setIsDeleteMode(false);
-        } catch (error) {
-            console.error("Error deleting note:", error);
+        setNoteToDelete(noteId);
+        setConfirmDeleteVisible(true);
+    };
+
+    const confirmDelete = async () => {
+        if (noteToDelete) {
+            try {
+                await noteApi.deleteNotes(noteToDelete);
+                setNotes(notes.filter(note => note.id !== noteToDelete));
+            } catch (error) {
+                console.error('Ошибка при удалении заметки', error);
+            }
         }
+        setConfirmDeleteVisible(false);
+        setIsDeleteMode(false);
     };
 
     // Обработчик долгого нажатия
@@ -199,7 +246,10 @@ const Notes: React.FC = () => {
             {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity
-                    onPress={() => navigation.goBack()}
+                    onPress={() => {
+                        setSelectedClientId(null)
+                        navigation.goBack()
+                    }}
                     style={styles.backButton}
                 >
                     <Icon name="chevron-left" size={28} color="#007AFF" />
@@ -209,7 +259,13 @@ const Notes: React.FC = () => {
                 </Text>
                 <View style={{ width: 28 }} />
             </View>
-
+            {selectedClientId && <TouchableOpacity
+                style={styles.backToClients}
+                onPress={() => setSelectedClientId(null)}
+            >
+                <Icon name="arrow-left" size={20} color="#007AFF" />
+                <Text style={styles.backToClientsText}>Выбрать другого клиента</Text>
+            </TouchableOpacity>}
             {selectedClientId && renderHeaderControls()}
 
             {!selectedClientId ? (
@@ -299,7 +355,7 @@ const Notes: React.FC = () => {
                             <Text style={styles.addButtonText}>Новая заметка</Text>
                         </LinearGradient>
                     </TouchableOpacity>
-
+                    {renderConfirmModal()}
                     <Modal
                         visible={isModalVisible}
                         animationType="slide"
@@ -312,6 +368,10 @@ const Notes: React.FC = () => {
                         >
                             <View style={styles.modalContent}>
                                 <Text style={styles.modalTitle}>Новая заметка</Text>
+
+                                <Text style={styles.selectedClientInfo}>
+                                    Клиент: {clients.find(c => c.id === selectedClientId)?.name}
+                                </Text>
 
                                 <TextInput
                                     style={styles.input}
@@ -347,6 +407,70 @@ const Notes: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
+    backToClients: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#e5e5e5',
+    },
+    backToClientsText: {
+        color: '#007AFF',
+        marginLeft: 8,
+        fontSize: 16,
+    },
+    selectedClientInfo: {
+        fontSize: 16,
+        color: '#1c1c1e',
+        marginBottom: 16,
+        textAlign: 'center',
+    },
+    confirmModalOverlay: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.4)',
+    },
+    confirmModalContent: {
+        backgroundColor: 'white',
+        borderRadius: 12,
+        padding: 24,
+        width: '80%',
+    },
+    confirmModalTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#1c1c1e',
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    confirmModalText: {
+        fontSize: 16,
+        color: '#868e96',
+        marginBottom: 24,
+        textAlign: 'center',
+    },
+    confirmModalButtons: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+    },
+    confirmButton: {
+        flex: 1,
+        borderRadius: 8,
+        padding: 12,
+        alignItems: 'center',
+        marginHorizontal: 4,
+    },
+    cancelConfirmButton: {
+        backgroundColor: '#f5f5f5',
+    },
+    deleteConfirmButton: {
+        backgroundColor: '#ff3b30',
+    },
+    confirmButtonText: {
+        fontSize: 16,
+        fontWeight: '500',
+    },
     controlsContainer: {
         padding: 16,
         backgroundColor: '#ffffff',

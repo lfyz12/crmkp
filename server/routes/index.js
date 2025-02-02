@@ -19,7 +19,7 @@ router.delete('/clients/:id', clientController.delete);
 
 // Interaction Routes
 router.post('/interactions', interactionController.create);
-router.get('/interactions', interactionController.getByClient);
+router.get('/interactions/:clientId', interactionController.getByClient);
 router.delete('/interactions/:id', interactionController.delete);
 
 // Order Routes

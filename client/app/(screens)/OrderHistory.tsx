@@ -29,8 +29,13 @@ const OrderHistory: React.FC = () => {
         orderDetails: "",
         totalAmount: 0,
     });
+
+    const [confirmDeleteVisible, setConfirmDeleteVisible] = useState(false);
+    const [orderToDelete, setOrderToDelete] = useState<number | null>(null);
+
     const [isDeleteMode, setIsDeleteMode] = useState(false);
     const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
+
     const [searchQuery, setSearchQuery] = useState("");
     const [sortBy, setSortBy] = useState<"date" | "amount">("date");
     const [sortAsc, setSortAsc] = useState(true);
@@ -72,6 +77,42 @@ const OrderHistory: React.FC = () => {
         </View>
     );
 
+    const renderConfirmModal = () => (
+        <Modal
+            visible={confirmDeleteVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setConfirmDeleteVisible(false)}
+        >
+            <View style={styles.confirmModalOverlay}>
+                <View style={styles.confirmModalContent}>
+                    <Text style={styles.confirmModalTitle}>
+                        Удалить заказ?
+                    </Text>
+                    <Text style={styles.confirmModalText}>
+                        Это действие нельзя отменить
+                    </Text>
+
+                    <View style={styles.confirmModalButtons}>
+                        <TouchableOpacity
+                            style={[styles.confirmButton, styles.cancelConfirmButton]}
+                            onPress={() => setConfirmDeleteVisible(false)}
+                        >
+                            <Text style={styles.confirmButtonText}>Отмена</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.confirmButton, styles.deleteConfirmButton]}
+                            onPress={confirmDelete}
+                        >
+                            <Text style={styles.confirmButtonText}>Удалить</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </View>
+        </Modal>
+    );
+
     const handleCardPress = (order: Order) => {
         if (isDeleteMode) return;
         setModalVisible(true);
@@ -87,13 +128,22 @@ const OrderHistory: React.FC = () => {
         setSelectedOrderId(id);
     };
 
-    const handleDelete = async (id: number) => {
-        try {
-            await orderApi.deleteOrders(id);
-            fetchOrders();
-        } catch (error) {
-            console.error("Ошибка при удалении заказа", error);
+    const handleDelete = (id: number) => {
+        setOrderToDelete(id);
+        setConfirmDeleteVisible(true);
+    };
+
+    // Функция для подтверждения удаления
+    const confirmDelete = async () => {
+        if (orderToDelete) {
+            try {
+                await orderApi.deleteOrders(orderToDelete);
+                fetchOrders();
+            } catch (error) {
+                console.error('Ошибка при удалении клиента', error);
+            }
         }
+        setConfirmDeleteVisible(false);
         setIsDeleteMode(false);
     };
 
@@ -208,7 +258,10 @@ const OrderHistory: React.FC = () => {
         <View style={styles.container}>
             <View style={styles.header}>
                 <TouchableOpacity
-                    onPress={() => navigation.goBack()}
+                    onPress={() => {
+                        setSelectedClientId(null)
+                        navigation.goBack()
+                    }}
                     style={styles.backButton}
                 >
                     <Icon name="chevron-left" size={28} color="#6A5ACD" />
@@ -249,6 +302,14 @@ const OrderHistory: React.FC = () => {
                 />
             ) : (
                 <>
+                    <TouchableOpacity
+                        style={styles.backToClients}
+                        onPress={() => setSelectedClientId(null)}
+                    >
+                        <Icon name="arrow-left" size={20} color="#007AFF" />
+                        <Text style={styles.backToClientsText}>Выбрать другого клиента</Text>
+                    </TouchableOpacity>
+
                     {renderHeaderControls()}
                     <FlatList
                         data={filteredAndSortedOrders}
@@ -291,6 +352,7 @@ const OrderHistory: React.FC = () => {
                 </TouchableOpacity>
             )}
 
+            {renderConfirmModal()}
             <Modal
                 visible={isModalVisible}
                 animationType="slide"
@@ -303,6 +365,11 @@ const OrderHistory: React.FC = () => {
                 >
                     <View style={styles.modalContent}>
                         <Text style={styles.modalTitle}>Новый заказ</Text>
+
+
+                        <Text style={styles.selectedClientInfo}>
+                            Клиент: {clients.find(c => c.id === selectedClientId)?.name}
+                        </Text>
 
                         <TextInput
                             style={styles.input}
@@ -353,6 +420,58 @@ const OrderHistory: React.FC = () => {
 const styles = StyleSheet.create({
     // Все стили из компонента Clients
     ...StyleSheet.create({
+        selectedClientInfo: {
+            fontSize: 16,
+            color: '#1c1c1e',
+            marginBottom: 16,
+            textAlign: 'center',
+        },
+        confirmModalOverlay: {
+            flex: 1,
+            justifyContent: 'center',
+            alignItems: 'center',
+            backgroundColor: 'rgba(0,0,0,0.4)',
+        },
+        confirmModalContent: {
+            backgroundColor: 'white',
+            borderRadius: 12,
+            padding: 24,
+            width: '80%',
+        },
+        confirmModalTitle: {
+            fontSize: 18,
+            fontWeight: '600',
+            color: '#1c1c1e',
+            marginBottom: 8,
+            textAlign: 'center',
+        },
+        confirmModalText: {
+            fontSize: 16,
+            color: '#868e96',
+            marginBottom: 24,
+            textAlign: 'center',
+        },
+        confirmModalButtons: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+        },
+        confirmButton: {
+            flex: 1,
+            borderRadius: 8,
+            padding: 12,
+            alignItems: 'center',
+            marginHorizontal: 4,
+        },
+        cancelConfirmButton: {
+            backgroundColor: '#f5f5f5',
+        },
+        deleteConfirmButton: {
+            backgroundColor: '#ff3b30',
+        },
+        confirmButtonText: {
+            fontSize: 16,
+            fontWeight: '500',
+        },
         controlsContainer: {
             padding: 16,
             backgroundColor: '#ffffff',
@@ -475,6 +594,18 @@ const styles = StyleSheet.create({
             fontSize: 15,
             color: '#868e96',
             marginLeft: 8,
+        },
+        backToClients: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            padding: 16,
+            borderBottomWidth: 1,
+            borderBottomColor: '#e5e5e5',
+        },
+        backToClientsText: {
+            color: '#007AFF',
+            marginLeft: 8,
+            fontSize: 16,
         },
         orderCard: {
             flexDirection: 'row',

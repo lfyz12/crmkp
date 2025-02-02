@@ -14,12 +14,12 @@ export const interactionApi = {
         }
     },
 
-    async getInteractions():AxiosResponse {
+    async getInteractions(clientId: number): Promise<AxiosResponse> {
         try {
-            const response = await $host.get(`/interactions`);
-            return response;
+            return await $host.get(`/interactions/${clientId}`);
         } catch (error) {
             handleError(error as AxiosError);
+            throw error;
         }
     },
 

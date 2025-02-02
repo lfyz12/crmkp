@@ -25,7 +25,8 @@ const Clients: React.FC = () => {
         phone: ''
     });
     const [newClient, setNewClient] = useState({ name: '', email: '', phone: '' });
-
+    const [confirmDeleteVisible, setConfirmDeleteVisible] = useState(false);
+    const [clientToDelete, setClientToDelete] = useState<number | null>(null);
     const navigation = useNavigation(); // Используем для навигации
     const [isDeleteMode, setIsDeleteMode] = useState(false);
     const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
@@ -280,6 +281,43 @@ const Clients: React.FC = () => {
             </KeyboardAvoidingView>
         </Modal>
     );
+
+    const renderConfirmModal = () => (
+        <Modal
+            visible={confirmDeleteVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setConfirmDeleteVisible(false)}
+        >
+            <View style={styles.confirmModalOverlay}>
+                <View style={styles.confirmModalContent}>
+                    <Text style={styles.confirmModalTitle}>
+                        Удалить клиента?
+                    </Text>
+                    <Text style={styles.confirmModalText}>
+                        Это действие нельзя отменить
+                    </Text>
+
+                    <View style={styles.confirmModalButtons}>
+                        <TouchableOpacity
+                            style={[styles.confirmButton, styles.cancelConfirmButton]}
+                            onPress={() => setConfirmDeleteVisible(false)}
+                        >
+                            <Text style={styles.confirmButtonText}>Отмена</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.confirmButton, styles.deleteConfirmButton]}
+                            onPress={confirmDelete}
+                        >
+                            <Text style={styles.confirmButtonText}>Удалить</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </View>
+        </Modal>
+    );
+
     const handleDelClient = async (id: number) => {
         try {
             await clientApi.deleteClient(id);
@@ -289,9 +327,24 @@ const Clients: React.FC = () => {
         }
     }
     const handleDelete = (id: number) => {
-        handleDelClient(id);
+        setClientToDelete(id);
+        setConfirmDeleteVisible(true);
+    };
+
+    // Функция для подтверждения удаления
+    const confirmDelete = async () => {
+        if (clientToDelete) {
+            try {
+                await clientApi.deleteClient(clientToDelete);
+                fetchClients();
+            } catch (error) {
+                console.error('Ошибка при удалении клиента', error);
+            }
+        }
+        setConfirmDeleteVisible(false);
         setIsDeleteMode(false);
     };
+
 
     const handleLongPress = (id: number) => {
         setIsDeleteMode(true);
@@ -374,11 +427,58 @@ const Clients: React.FC = () => {
 
             {/* Модальное окно для добавления клиента */}
             {renderModal()}
+            {renderConfirmModal()}
         </View>
     );
 };
 
 const styles = StyleSheet.create({
+    confirmModalOverlay: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.4)',
+    },
+    confirmModalContent: {
+        backgroundColor: 'white',
+        borderRadius: 12,
+        padding: 24,
+        width: '80%',
+    },
+    confirmModalTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#1c1c1e',
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    confirmModalText: {
+        fontSize: 16,
+        color: '#868e96',
+        marginBottom: 24,
+        textAlign: 'center',
+    },
+    confirmModalButtons: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+    },
+    confirmButton: {
+        flex: 1,
+        borderRadius: 8,
+        padding: 12,
+        alignItems: 'center',
+        marginHorizontal: 4,
+    },
+    cancelConfirmButton: {
+        backgroundColor: '#f5f5f5',
+    },
+    deleteConfirmButton: {
+        backgroundColor: '#ff3b30',
+    },
+    confirmButtonText: {
+        fontSize: 16,
+        fontWeight: '500',
+    },
     controlsContainer: {
         padding: 16,
         backgroundColor: '#ffffff',

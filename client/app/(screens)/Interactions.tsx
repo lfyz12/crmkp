@@ -37,7 +37,7 @@ const Interactions: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [sortBy, setSortBy] = useState<'date' | 'type' | 'clientId'>('date');
     const [sortAsc, setSortAsc] = useState(false);
-
+    const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
     // Фильтрация и сортировка
     const filteredAndSortedInteractions = useMemo(() => {
         let result = [...interactions];
@@ -137,13 +137,12 @@ const Interactions: React.FC = () => {
         </View>
     );
 
-    const fetchInteractions = async () => {
+    const fetchInteractions = async (clientId: number) => {
         try {
-            const response = await interactionApi.getInteractions();
-            const data = await response.data;
+            const response = await interactionApi.getInteractions(clientId);
+            const data = response.data;
 
-            // Конвертируем строки в Date объекты
-            const formattedData = data.map(interaction => ({
+            const formattedData = data.map((interaction: Interaction) => ({
                 ...interaction,
                 date: new Date(interaction.date)
             }));
@@ -151,6 +150,7 @@ const Interactions: React.FC = () => {
             setInteractions(formattedData);
         } catch (error) {
             console.error('Error fetching interactions:', error);
+            alert('Ошибка при загрузке взаимодействий');
         }
     };
 
@@ -162,8 +162,16 @@ const Interactions: React.FC = () => {
             console.error('Ошибка при удалении клиента', error);
         }
     }
-    const handleDelete = (id: number) => {
-        handleDelClient(id);
+    const handleDelete = async (id: number) => {
+        try {
+            await interactionApi.deleteInteractions(id);
+            if (selectedClientId) {
+                await fetchInteractions(selectedClientId);
+            }
+        } catch (error) {
+            console.error('Ошибка при удалении:', error);
+            alert('Ошибка при удалении взаимодействия');
+        }
         setIsDeleteMode(false);
     };
 
@@ -196,10 +204,15 @@ const Interactions: React.FC = () => {
 
     // Добавление нового взаимодействия
     const handleAddInteraction = async () => {
+        if (!selectedClientId) {
+            alert('Сначала выберите клиента');
+            return;
+        }
+
         try {
-            // Конвертируем в ISO строку перед отправкой
             const payload = {
                 ...newInteraction,
+                clientId: selectedClientId, // Используем выбранный clientId
                 date: newInteraction.date.toISOString()
             };
 
@@ -221,12 +234,16 @@ const Interactions: React.FC = () => {
         }
     };
 
+
     return (
         <View style={styles.container}>
             {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity
-                    onPress={() => navigation.goBack()}
+                    onPress={() => {
+                        setSelectedClientId(null)
+                        navigation.goBack()
+                    }}
                     style={styles.backButton}
                 >
                     <Icon name="chevron-left" size={28} color="#007AFF" />
@@ -234,9 +251,102 @@ const Interactions: React.FC = () => {
                 <Text style={styles.headerText}>Взаимодействия</Text>
                 <View style={{ width: 28 }} />
             </View>
-            {renderHeaderControls()}
+            {!selectedClientId ? (
+                <FlatList
+                    data={clients}
+                    contentContainerStyle={styles.listContent}
+                    keyExtractor={(item) => item.id.toString()}
+                    renderItem={({ item }) => (
+                        <TouchableOpacity
+                            style={styles.clientCard}
+                            onPress={() => {
+                                setSelectedClientId(item.id);
+                                fetchInteractions(item.id);
+                            }}
+                        >
+                            <LinearGradient
+                                colors={['#4A90E2', '#007AFF']}
+                                style={styles.clientIcon}
+                            >
+                                <Icon name="account" size={20} color="white" />
+                            </LinearGradient>
+                            <View style={styles.clientInfo}>
+                                <Text style={styles.clientName}>{item.name}</Text>
+                                <Text style={styles.clientEmail}>{item.email}</Text>
+                            </View>
+                        </TouchableOpacity>
+                    )}
+                />
+            ) : (
+                <>
+                {/* Добавляем кнопку возврата к выбору клиента */}
+                <TouchableOpacity
+                    style={styles.backToClients}
+                    onPress={() => setSelectedClientId(null)}
+                >
+                    <Icon name="arrow-left" size={20} color="#007AFF" />
+                    <Text style={styles.backToClientsText}>Выбрать другого клиента</Text>
+                </TouchableOpacity>
+                    {renderHeaderControls()}
+                    <FlatList
+                        data={filteredAndSortedInteractions}
+                        keyExtractor={(item) => item.id}
+                        renderItem={({ item }) => (
+                            <TouchableOpacity
+                                style={styles.interactionCard}
+                                onLongPress={() => handleLongPress(item.id)}
+                                activeOpacity={0.7}
+                            >
+                                <LinearGradient
+                                    colors={['#FF6B6B', '#FF4500']}
+                                    style={styles.typeIcon}
+                                >
+                                    <Icon
+                                        name={getInteractionIcon(item.type)}
+                                        size={20}
+                                        color="white"
+                                    />
+                                </LinearGradient>
+
+                                <View style={styles.interactionInfo}>
+                                    <Text style={styles.clientName}>Клиент #{item.clientId}</Text>
+                                    <View style={styles.detailRow}>
+                                        <Icon name="calendar" size={14} color="#868e96" />
+                                        <Text style={styles.date}>
+                                            {new Date(item.date).toLocaleDateString()}
+                                        </Text>
+                                    </View>
+                                    <Text
+                                        style={styles.notes}
+                                        numberOfLines={2}
+                                        ellipsizeMode="tail"
+                                    >
+                                        {item.notes}
+                                    </Text>
+                                </View>
+
+                                {isDeleteMode && (
+                                    <TouchableOpacity
+                                        onPress={() => handleDelete(item.id)}
+                                        style={styles.deleteButton}
+                                    >
+                                        <Icon name="trash-can-outline" size={24} color="#ff3b30" />
+                                    </TouchableOpacity>
+                                )}
+                            </TouchableOpacity>
+                        )}
+                        ListEmptyComponent={
+                            <View style={styles.emptyState}>
+                                <Icon name="comment-text-outline" size={48} color="#868e96" />
+                                <Text style={styles.emptyText}>Нет взаимодействий</Text>
+                            </View>
+                        }
+                        contentContainerStyle={styles.listContent}
+                    />
+                </>
+            )}
             {/* Add Button */}
-            <TouchableOpacity
+            {selectedClientId && <TouchableOpacity
                 style={styles.addButton}
                 onPress={() => setModalVisible(true)}
             >
@@ -249,64 +359,7 @@ const Interactions: React.FC = () => {
                     <Icon name="plus" size={24} color="white" />
                     <Text style={styles.addButtonText}>Новое взаимодействие</Text>
                 </LinearGradient>
-            </TouchableOpacity>
-
-            {/* Interactions List */}
-            <FlatList
-                data={filteredAndSortedInteractions}
-                keyExtractor={(item) => item.id}
-                renderItem={({ item }) => (
-                    <TouchableOpacity
-                        style={styles.interactionCard}
-                        onLongPress={() => handleLongPress(item.id)}
-                        activeOpacity={0.7}
-                    >
-                        <LinearGradient
-                            colors={['#FF6B6B', '#FF4500']}
-                            style={styles.typeIcon}
-                        >
-                            <Icon
-                                name={getInteractionIcon(item.type)}
-                                size={20}
-                                color="white"
-                            />
-                        </LinearGradient>
-
-                        <View style={styles.interactionInfo}>
-                            <Text style={styles.clientName}>Клиент #{item.clientId}</Text>
-                            <View style={styles.detailRow}>
-                                <Icon name="calendar" size={14} color="#868e96" />
-                                <Text style={styles.date}>
-                                    {new Date(item.date).toLocaleDateString()}
-                                </Text>
-                            </View>
-                            <Text
-                                style={styles.notes}
-                                numberOfLines={2}
-                                ellipsizeMode="tail"
-                            >
-                                {item.notes}
-                            </Text>
-                        </View>
-
-                        {isDeleteMode && (
-                            <TouchableOpacity
-                                onPress={() => handleDelete(item.id)}
-                                style={styles.deleteButton}
-                            >
-                                <Icon name="trash-can-outline" size={24} color="#ff3b30" />
-                            </TouchableOpacity>
-                        )}
-                    </TouchableOpacity>
-                )}
-                ListEmptyComponent={
-                    <View style={styles.emptyState}>
-                        <Icon name="comment-text-outline" size={48} color="#868e96" />
-                        <Text style={styles.emptyText}>Нет взаимодействий</Text>
-                    </View>
-                }
-                contentContainerStyle={styles.listContent}
-            />
+            </TouchableOpacity>}
 
             {/* Delete Mode Footer */}
             {isDeleteMode && (
@@ -330,31 +383,13 @@ const Interactions: React.FC = () => {
                     style={styles.modalOverlay}
                 >
                     <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Новое взаимодействие</Text>
+                        <Text style={styles.modalTitle}>
+                            Новое взаимодействие
+                        </Text>
 
-                        <View style={styles.pickerContainer}>
-                            <Picker
-                                selectedValue={newInteraction.clientId}
-                                style={styles.picker}
-                                dropdownIconColor="#007AFF"
-                                onValueChange={(value) =>
-                                    setNewInteraction({ ...newInteraction, clientId: value })
-                                }
-                            >
-                                <Picker.Item
-                                    label="Выберите клиента"
-                                    value=""
-                                    style={styles.pickerPlaceholder}
-                                />
-                                {clients.map((client) => (
-                                    <Picker.Item
-                                        key={client.id}
-                                        label={client.name}
-                                        value={client.id}
-                                    />
-                                ))}
-                            </Picker>
-                        </View>
+                        <Text style={styles.selectedClientInfo}>
+                            Клиент: {clients.find(c => c.id === selectedClientId)?.name}
+                        </Text>
 
                         <TextInput
                             style={styles.input}
@@ -433,6 +468,59 @@ const getInteractionIcon = (type: string) => {
 };
 
 const styles = StyleSheet.create({
+    clientCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#ffffff',
+        padding: 16,
+        marginHorizontal: 16,
+        marginVertical: 8,
+        borderRadius: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 6,
+        elevation: 3,
+    },
+    backToClients: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#e5e5e5',
+    },
+    backToClientsText: {
+        color: '#007AFF',
+        marginLeft: 8,
+        fontSize: 16,
+    },
+    selectedClientInfo: {
+        fontSize: 16,
+        color: '#1c1c1e',
+        marginBottom: 16,
+        textAlign: 'center',
+    },
+    clientIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 16,
+    },
+    clientInfo: {
+        flex: 1,
+    },
+    clientName: {
+        fontSize: 17,
+        fontWeight: '500',
+        color: '#1c1c1e',
+        marginBottom: 4,
+    },
+    clientEmail: {
+        fontSize: 15,
+        color: '#868e96',
+    },
     controlsContainer: {
         padding: 16,
         backgroundColor: '#ffffff',
@@ -562,12 +650,6 @@ const styles = StyleSheet.create({
     },
     interactionInfo: {
         flex: 1,
-    },
-    clientName: {
-        fontSize: 17,
-        fontWeight: '500',
-        color: '#1c1c1e',
-        marginBottom: 4,
     },
     detailRow: {
         flexDirection: 'row',
